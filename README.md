@@ -9,8 +9,6 @@
   - [定期同步上游](#定期同步上游)
   - [日常開發流程](#日常開發流程)
 - [Prerequisite](#prerequisite)
-  - [開發環境（跑測試 / lint / build）](#開發環境跑測試--lint--build)
-  - [執行 App（啟動 OpenClaw agent sandbox）](#執行-app啟動-openclaw-agent-sandbox)
 - [Setup](#setup)
   - [Step 1：安裝 Ollama 與拉取模型](#step-1安裝-ollama-與拉取模型)
   - [Step 2：安裝 OpenShell](#step-2安裝-openshell)
@@ -68,36 +66,18 @@ git push origin dev-NAME
 
 ## Prerequisite
 
-### 開發環境（跑測試 / lint / build）
-
-| 項目 | 最低版本 |
-|------|----------|
-| Node.js | 22.16+ |
-| npm | 10+ |
-| Docker | 任意支援版本，需正在運行 |
-| uv | 任意版本（Python 依賴管理） |
-| Python | 3.11+（blueprint 與文件建置用） |
-
-```bash
-npm install
-cd nemoclaw && npm install && npm run build && cd ..
-cd nemoclaw-blueprint && uv sync && cd ..
-```
-
-### 執行 App（啟動 OpenClaw agent sandbox）
-
-除上述開發環境外，還需要：
-
-| 項目 | 說明 |
-|------|------|
-| OpenShell | NVIDIA agent runtime，透過安裝腳本取得 |
-| CPU / RAM / Disk | 最低 4 vCPU / 8 GB RAM / 20 GB 磁碟空間 |
-| Container runtime | Linux 上使用 Docker 或 Podman |
-
-```bash
-# 安裝後透過 onboard 引導建立 sandbox
-node bin/nemoclaw.js onboard
-```
+| 項目 | 最低需求 | 建議 |
+|------|----------|------|
+| CPU | 4 vCPU | 4+ vCPU |
+| RAM | 8 GB | 16 GB |
+| Disk | 20 GB | 40 GB |
+| OS | Ubuntu 22.04 LTS+ | — |
+| Container runtime | Docker 或 Podman（Linux）| — |
+| OpenShell | 透過安裝腳本取得 | — |
+| Node.js | 22.16+ | — |
+| npm | 10+ | — |
+| uv | 任意版本（Python 依賴管理） | — |
+| Python | 3.11+（blueprint 與文件建置用） | — |
 
 ## Setup
 
