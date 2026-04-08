@@ -18,6 +18,7 @@
   - [Step 4：執行 onboard](#step-4執行-onboard)
   - [Step 5：連線到 sandbox](#step-5連線到-sandbox)
 - [Observe](#observe)
+  - [GPU 使用率](#gpu-使用率)
 - [Reference](#reference)
 
 ## Document
@@ -113,7 +114,14 @@ ollama serve &
 ollama pull qwen3.5:27b
 ```
 
-> **記憶體提示**：`qwen3.5:27b` 需要約 17 GB RAM。若記憶體不足，可改用 `qwen3.5:9b`（6.6 GB）或 `qwen3.5:4b`（3.4 GB）。
+- **記憶體提示**：`qwen3.5:27b` 需要約 17 GB RAM。若記憶體不足，可改用 `qwen3.5:9b`（6.6 GB）或 `qwen3.5:4b`（3.4 GB）。
+
+- **GPU Persistence Mode**：啟用後 GPU driver 保持常駐，可減少 inference 冷啟動延遲。若機器專用於跑模型，建議啟用；若需節省閒置資源則停用。
+
+  ```bash
+  sudo nvidia-smi -pm 1   # 啟用（推薦用於專用 GPU 機器）
+  sudo nvidia-smi -pm 0   # 停用
+  ```
 
 ### Step 2：安裝 OpenShell
 
@@ -129,8 +137,6 @@ openshell --version
 
 ### Step 3：安裝 npm 依賴並讓 CLI 可用
 
-> **注意**：`npm install` 的 `prepare` 腳本會移除 devDependency，需加 `--ignore-scripts`。
-
 ```bash
 # 安裝全部依賴（跳過 prepare 腳本）
 npm install --ignore-scripts
@@ -141,6 +147,8 @@ npx tsc -p tsconfig.src.json
 # 讓 nemoclaw 指令全域可用
 npm link
 ```
+
+- **注意**：`npm install` 的 `prepare` 腳本會移除 devDependency，需加 `--ignore-scripts`。
 
 確認：
 
