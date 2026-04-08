@@ -178,3 +178,6 @@ openclaw tui
 - GitHub
   - [NVIDIA / NemoClaw](https://github.com/NVIDIA/NemoClaw)
   - [openclaw / openclaw](https://github.com/openclaw/openclaw)
+- Ollama Models
+  - [gpt-oss](https://ollama.com/library/gpt-oss)
+  - [qwen3.5](https://ollama.com/library/qwen3.5)
