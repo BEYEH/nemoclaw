@@ -17,6 +17,7 @@
   - [Step 3：安裝 npm 依賴並讓 CLI 可用](#step-3安裝-npm-依賴並讓-cli-可用)
   - [Step 4：執行 onboard](#step-4執行-onboard)
   - [Step 5：連線到 sandbox](#step-5連線到-sandbox)
+- [Observe](#observe)
 - [Reference](#reference)
 
 ## Document
@@ -171,6 +172,14 @@ nemoclaw my-assistant connect
 
 ```bash
 openclaw tui
+```
+
+## Observe
+
+### GPU 使用率
+
+```bash
+watch -n 1 nvidia-smi
 ```
 
 ## Reference
