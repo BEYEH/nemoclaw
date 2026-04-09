@@ -9,14 +9,7 @@
 - [General Setup](#general-setup)
 - [Developer Setup](#developer-setup)
   - [Contribute](#contribute)
-    - [定期同步上游](#定期同步上游)
-    - [日常開發流程](#日常開發流程)
   - [Install](#install)
-    - [Step 1：安裝 Ollama 與拉取模型](#step-1安裝-ollama-與拉取模型)
-    - [Step 2：安裝 OpenShell](#step-2安裝-openshell)
-    - [Step 3：安裝 npm 依賴並讓 CLI 可用](#step-3安裝-npm-依賴並讓-cli-可用)
-    - [Step 4：執行 onboard](#step-4執行-onboard)
-    - [Step 5：連線到 sandbox](#step-5連線到-sandbox)
 - [Observe](#observe)
   - [GPU 使用率](#gpu-使用率)
 - [Reference](#reference)
@@ -88,120 +81,120 @@ flowchart TD
     R -->|"PR 2：驗收通過後 Pull Request"| M
 ```
 
-#### 定期同步上游
+- 定期同步上游
 
-```bash
-# 1. 至 GitHub 點 Sync fork，更新 origin/main
-# 2. 在 dev-NAME 執行
-git fetch origin
-git merge origin/main
-```
+  ```bash
+  # 1. 至 GitHub 點 Sync fork，更新 origin/main
+  # 2. 在 dev-NAME 執行
+  git fetch origin
+  git merge origin/main
+  ```
 
-#### 日常開發流程
+- 日常開發流程
 
-```bash
-# 1. 編輯檔案後 commit
-/commit
+  ```bash
+  # 1. 編輯檔案後 commit
+  /commit
 
-# 2. push 至個人 fork
-git push origin dev-NAME
+  # 2. push 至個人 fork
+  git push origin dev-NAME
 
-# 3. 至 GitHub 建立 PR 1，將 dev-NAME 合併至 release-NAME（測試驗收）
+  # 3. 至 GitHub 建立 PR 1，將 dev-NAME 合併至 release-NAME（測試驗收）
 
-# 4. 驗收通過後，建立 PR 2，將 release-NAME 合併至 main-NAME
-```
+  # 4. 驗收通過後，建立 PR 2，將 release-NAME 合併至 main-NAME
+  ```
 
 ### Install
 
-#### Step 1：安裝 Ollama 與拉取模型
-
-```bash
-# 安裝 Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-
-# 啟動服務（若未自動啟動）
-ollama serve &
-
-# 拉取 gpt-oss:20b 模型（約 14 GB）
-ollama pull gpt-oss:20b
-```
-
-- **記憶體提示**：`gpt-oss:20b` 需要約 16 GB RAM。
-
-- **GPU Persistence Mode**：啟用後 GPU driver 保持常駐，可減少 inference 冷啟動延遲。若機器專用於跑模型，建議啟用；若需節省閒置資源則停用。
+- Step 1：安裝 Ollama 與拉取模型
 
   ```bash
-  sudo nvidia-smi -pm 1   # 啟用（推薦用於專用 GPU 機器）
-  sudo nvidia-smi -pm 0   # 停用
+  # 安裝 Ollama
+  curl -fsSL https://ollama.com/install.sh | sh
+
+  # 啟動服務（若未自動啟動）
+  ollama serve &
+
+  # 拉取 gpt-oss:20b 模型（約 14 GB）
+  ollama pull gpt-oss:20b
   ```
 
-#### Step 2：安裝 OpenShell
+  - **記憶體提示**：`gpt-oss:20b` 需要約 16 GB RAM。
 
-```bash
-bash scripts/install-openshell.sh
-```
+  - **GPU Persistence Mode**：啟用後 GPU driver 保持常駐，可減少 inference 冷啟動延遲。若機器專用於跑模型，建議啟用；若需節省閒置資源則停用。
 
-確認安裝成功：
+    ```bash
+    sudo nvidia-smi -pm 1   # 啟用（推薦用於專用 GPU 機器）
+    sudo nvidia-smi -pm 0   # 停用
+    ```
 
-```bash
-openshell --version
-```
+- Step 2：安裝 OpenShell
 
-- **OpenShell Lifecycle**：NemoClaw 管理的環境應透過 `nemoclaw onboard` 操作，避免直接呼叫以下指令繞過管理層：
+  ```bash
+  bash scripts/install-openshell.sh
+  ```
 
-  | 指令 | 用途 | 建議 |
-  |------|------|------|
-  | `openshell self-update` | 升級 OpenShell 但不更新 nemoclaw 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
-  | `npm update -g openshell` | 更新 OpenShell npm 套件但不更新 nemoclaw 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
-  | `openshell gateway start --recreate` | 重建 gateway 但不重建 sandbox 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
-  | `openshell sandbox create` | 直接建立 sandbox 會與 nemoclaw 狀態不同步 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+  確認安裝成功：
 
-#### Step 3：安裝 npm 依賴並讓 CLI 可用
+  ```bash
+  openshell --version
+  ```
 
-```bash
-# 安裝全部依賴（跳過 prepare 腳本）
-npm install --ignore-scripts
+  - **OpenShell Lifecycle**：NemoClaw 管理的環境應透過 `nemoclaw onboard` 操作，避免直接呼叫以下指令繞過管理層：
 
-# 手動補做 CLI build
-npx tsc -p tsconfig.src.json
+    | 指令 | 用途 | 建議 |
+    |------|------|------|
+    | `openshell self-update` | 升級 OpenShell 但不更新 nemoclaw 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+    | `npm update -g openshell` | 更新 OpenShell npm 套件但不更新 nemoclaw 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+    | `openshell gateway start --recreate` | 重建 gateway 但不重建 sandbox 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+    | `openshell sandbox create` | 直接建立 sandbox 會與 nemoclaw 狀態不同步 | ⚠️ 避免，會繞過 nemoclaw 管理 |
 
-# 讓 nemoclaw 指令全域可用
-npm link
-```
+- Step 3：安裝 npm 依賴並讓 CLI 可用
 
-- **注意**：`npm install` 的 `prepare` 腳本會移除 devDependency，需加 `--ignore-scripts`。
+  ```bash
+  # 安裝全部依賴（跳過 prepare 腳本）
+  npm install --ignore-scripts
 
-確認：
+  # 手動補做 CLI build
+  npx tsc -p tsconfig.src.json
 
-```bash
-nemoclaw --version
-```
+  # 讓 nemoclaw 指令全域可用
+  npm link
+  ```
 
-#### Step 4：執行 onboard
+  - **注意**：`npm install` 的 `prepare` 腳本會移除 devDependency，需加 `--ignore-scripts`。
 
-```bash
-nemoclaw onboard
-```
+  確認：
 
-引導過程中選擇 inference provider 時：
+  ```bash
+  nemoclaw --version
+  ```
 
-| 項目 | 填入值 |
-|------|--------|
-| Provider | Ollama (local) |
-| URL | `http://localhost:11434` |
-| Model | `gpt-oss:20b` |
+- Step 4：執行 onboard
 
-#### Step 5：連線到 sandbox
+  ```bash
+  nemoclaw onboard
+  ```
 
-```bash
-nemoclaw my-assistant connect
-```
+  引導過程中選擇 inference provider 時：
 
-進入 sandbox shell 後，開啟 TUI 與 agent 對話：
+  | 項目 | 填入值 |
+  |------|--------|
+  | Provider | Ollama (local) |
+  | URL | `http://localhost:11434` |
+  | Model | `gpt-oss:20b` |
 
-```bash
-openclaw tui
-```
+- Step 5：連線到 sandbox
+
+  ```bash
+  nemoclaw my-assistant connect
+  ```
+
+  進入 sandbox shell 後，開啟 TUI 與 agent 對話：
+
+  ```bash
+  openclaw tui
+  ```
 
 ## Observe
 
