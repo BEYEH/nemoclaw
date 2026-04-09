@@ -18,6 +18,9 @@ function envInt(name, fallback) {
   const n = Number(raw);
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : fallback;
 }
+
+/** Inference timeout (seconds) for local providers (Ollama, vLLM, NIM). */
+const LOCAL_INFERENCE_TIMEOUT_SECS = envInt("NEMOCLAW_LOCAL_INFERENCE_TIMEOUT", 180);
 const { ROOT, SCRIPTS, redact, run, runCapture, shellQuote } = require("./runner");
 const { stageOptimizedSandboxBuildContext } = require("./sandbox-build-context");
 const {
@@ -105,7 +108,7 @@ const BUILD_ENDPOINT_URL = "https://integrate.api.nvidia.com/v1";
 const OPENAI_ENDPOINT_URL = "https://api.openai.com/v1";
 const ANTHROPIC_ENDPOINT_URL = "https://api.anthropic.com";
 const GEMINI_ENDPOINT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
-const BRAVE_SEARCH_HELP_URL = "https://api.search.brave.com/app/keys";
+const BRAVE_SEARCH_HELP_URL = "https://api-dashboard.search.brave.com/app/keys";
 
 const REMOTE_PROVIDER_CONFIG = {
   build: {
@@ -386,6 +389,53 @@ function getInstalledOpenshellVersion(versionOutput = null) {
   return match[1];
 }
 
+/**
+ * Compare two semver-like x.y.z strings. Returns true iff `left >= right`.
+ * Non-numeric or missing components are treated as 0.
+ */
+function versionGte(left = "0.0.0", right = "0.0.0") {
+  const lhs = String(left)
+    .split(".")
+    .map((part) => Number.parseInt(part, 10) || 0);
+  const rhs = String(right)
+    .split(".")
+    .map((part) => Number.parseInt(part, 10) || 0);
+  const length = Math.max(lhs.length, rhs.length);
+  for (let index = 0; index < length; index += 1) {
+    const a = lhs[index] || 0;
+    const b = rhs[index] || 0;
+    if (a > b) return true;
+    if (a < b) return false;
+  }
+  return true;
+}
+
+/**
+ * Read `min_openshell_version` from nemoclaw-blueprint/blueprint.yaml. Returns
+ * null if the blueprint or field is missing or unparseable — callers must
+ * treat null as "no constraint configured" so a malformed install does not
+ * become a hard onboard blocker. See #1317.
+ */
+function getBlueprintMinOpenshellVersion(rootDir = ROOT) {
+  try {
+    // Lazy require: yaml is already a dependency via bin/lib/policies.js but
+    // pulling it at module load would slow down `nemoclaw --help` for users
+    // who never reach the preflight path.
+    const YAML = require("yaml");
+    const blueprintPath = path.join(rootDir, "nemoclaw-blueprint", "blueprint.yaml");
+    if (!fs.existsSync(blueprintPath)) return null;
+    const raw = fs.readFileSync(blueprintPath, "utf8");
+    const parsed = YAML.parse(raw);
+    const value = parsed && parsed.min_openshell_version;
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (!/^[0-9]+\.[0-9]+\.[0-9]+/.test(trimmed)) return null;
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
 function getStableGatewayImageRef(versionOutput = null) {
   const version = getInstalledOpenshellVersion(versionOutput);
   if (!version) return null;
@@ -459,6 +509,9 @@ const {
   classifySandboxCreateFailure,
   validateNvidiaApiKeyValue,
   isSafeModelId,
+  isNvcfFunctionNotFoundForAccount,
+  nvcfFunctionNotFoundMessage,
+  shouldSkipResponsesProbe,
 } = validation;
 
 // validateNvidiaApiKeyValue — see validation import above
@@ -940,6 +993,26 @@ function patchStagedDockerfile(
     /^ARG NEMOCLAW_BUILD_ID=.*$/m,
     `ARG NEMOCLAW_BUILD_ID=${buildId}`,
   );
+  // Honor NEMOCLAW_PROXY_HOST / NEMOCLAW_PROXY_PORT exported in the host
+  // shell so the sandbox-side nemoclaw-start.sh sees them via $ENV at runtime.
+  // Without this, the host export is silently dropped at image build time and
+  // the sandbox falls back to the default 10.200.0.1:3128 proxy. See #1409.
+  const PROXY_HOST_RE = /^[A-Za-z0-9._:-]+$/;
+  const PROXY_PORT_RE = /^[0-9]{1,5}$/;
+  const proxyHostEnv = process.env.NEMOCLAW_PROXY_HOST;
+  if (proxyHostEnv && PROXY_HOST_RE.test(proxyHostEnv)) {
+    dockerfile = dockerfile.replace(
+      /^ARG NEMOCLAW_PROXY_HOST=.*$/m,
+      `ARG NEMOCLAW_PROXY_HOST=${proxyHostEnv}`,
+    );
+  }
+  const proxyPortEnv = process.env.NEMOCLAW_PROXY_PORT;
+  if (proxyPortEnv && PROXY_PORT_RE.test(proxyPortEnv)) {
+    dockerfile = dockerfile.replace(
+      /^ARG NEMOCLAW_PROXY_PORT=.*$/m,
+      `ARG NEMOCLAW_PROXY_PORT=${proxyPortEnv}`,
+    );
+  }
   dockerfile = dockerfile.replace(
     /^ARG NEMOCLAW_WEB_CONFIG_B64=.*$/m,
     `ARG NEMOCLAW_WEB_CONFIG_B64=${webSearch.buildWebSearchDockerConfig(
@@ -968,49 +1041,184 @@ function patchStagedDockerfile(
   fs.writeFileSync(dockerfilePath, dockerfile);
 }
 
-function probeOpenAiLikeEndpoint(endpointUrl, model, apiKey) {
-  const probes = [
-    {
-      name: "Responses API",
-      api: "openai-responses",
-      url: `${String(endpointUrl).replace(/\/+$/, "")}/responses`,
-      body: JSON.stringify({
-        model,
-        input: "Reply with exactly: OK",
-      }),
-    },
-    {
-      name: "Chat Completions API",
-      api: "openai-completions",
-      url: `${String(endpointUrl).replace(/\/+$/, "")}/chat/completions`,
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: "Reply with exactly: OK" }],
-      }),
-    },
-  ];
+function parseJsonObject(body) {
+  if (!body) return null;
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+}
+
+function hasResponsesToolCall(body) {
+  const parsed = parseJsonObject(body);
+  if (!parsed || !Array.isArray(parsed.output)) return false;
+
+  const stack = [...parsed.output];
+  while (stack.length > 0) {
+    const item = stack.pop();
+    if (!item || typeof item !== "object") continue;
+    if (item.type === "function_call" || item.type === "tool_call") return true;
+    if (Array.isArray(item.content)) {
+      stack.push(...item.content);
+    }
+  }
+
+  return false;
+}
+
+function shouldRequireResponsesToolCalling(provider) {
+  return (
+    provider === "nvidia-prod" || provider === "gemini-api" || provider === "compatible-endpoint"
+  );
+}
+
+// shouldSkipResponsesProbe and isNvcfFunctionNotFoundForAccount /
+// nvcfFunctionNotFoundMessage — see validation import above. They live in
+// src/lib/validation.ts so they can be unit-tested independently.
+
+// Per-validation-probe curl timing. Tighter than the default 60s in
+// getCurlTimingArgs() because validation must not hang the wizard for a
+// minute on a misbehaving model. See issue #1601 (Bug 3).
+function getValidationProbeCurlArgs() {
+  return ["--connect-timeout", "10", "--max-time", "15"];
+}
+
+function probeResponsesToolCalling(endpointUrl, model, apiKey) {
+  const result = runCurlProbe([
+    "-sS",
+    ...getValidationProbeCurlArgs(),
+    "-H",
+    "Content-Type: application/json",
+    ...(apiKey ? ["-H", `Authorization: Bearer ${normalizeCredentialValue(apiKey)}`] : []),
+    "-d",
+    JSON.stringify({
+      model,
+      input: "Call the emit_ok function with value OK. Do not answer with plain text.",
+      tool_choice: "required",
+      tools: [
+        {
+          type: "function",
+          name: "emit_ok",
+          description: "Returns the probe value for validation.",
+          parameters: {
+            type: "object",
+            properties: {
+              value: { type: "string" },
+            },
+            required: ["value"],
+            additionalProperties: false,
+          },
+        },
+      ],
+    }),
+    `${String(endpointUrl).replace(/\/+$/, "")}/responses`,
+  ]);
+
+  if (!result.ok) {
+    return result;
+  }
+  if (hasResponsesToolCall(result.body)) {
+    return result;
+  }
+  return {
+    ok: false,
+    httpStatus: result.httpStatus,
+    curlStatus: result.curlStatus,
+    body: result.body,
+    stderr: result.stderr,
+    message: `HTTP ${result.httpStatus}: Responses API did not return a tool call`,
+  };
+}
+
+function probeOpenAiLikeEndpoint(endpointUrl, model, apiKey, options = {}) {
+  const responsesProbe =
+    options.requireResponsesToolCalling === true
+      ? {
+          name: "Responses API with tool calling",
+          api: "openai-responses",
+          execute: () => probeResponsesToolCalling(endpointUrl, model, apiKey),
+        }
+      : {
+          name: "Responses API",
+          api: "openai-responses",
+          execute: () =>
+            runCurlProbe([
+              "-sS",
+              ...getValidationProbeCurlArgs(),
+              "-H",
+              "Content-Type: application/json",
+              ...(apiKey
+                ? ["-H", `Authorization: Bearer ${normalizeCredentialValue(apiKey)}`]
+                : []),
+              "-d",
+              JSON.stringify({
+                model,
+                input: "Reply with exactly: OK",
+              }),
+              `${String(endpointUrl).replace(/\/+$/, "")}/responses`,
+            ]),
+        };
+
+  const chatCompletionsProbe = {
+    name: "Chat Completions API",
+    api: "openai-completions",
+    execute: () =>
+      runCurlProbe([
+        "-sS",
+        ...getValidationProbeCurlArgs(),
+        "-H",
+        "Content-Type: application/json",
+        ...(apiKey ? ["-H", `Authorization: Bearer ${normalizeCredentialValue(apiKey)}`] : []),
+        "-d",
+        JSON.stringify({
+          model,
+          messages: [{ role: "user", content: "Reply with exactly: OK" }],
+        }),
+        `${String(endpointUrl).replace(/\/+$/, "")}/chat/completions`,
+      ]),
+  };
+
+  // NVIDIA Build does not expose /v1/responses; probing it always returns
+  // "404 page not found" and only adds noise to error messages. Skip it
+  // entirely for that provider. See issue #1601.
+  const probes = options.skipResponsesProbe
+    ? [chatCompletionsProbe]
+    : [responsesProbe, chatCompletionsProbe];
 
   const failures = [];
   for (const probe of probes) {
-    const result = runCurlProbe([
-      "-sS",
-      ...getCurlTimingArgs(),
-      "-H",
-      "Content-Type: application/json",
-      ...(apiKey ? ["-H", `Authorization: Bearer ${normalizeCredentialValue(apiKey)}`] : []),
-      "-d",
-      probe.body,
-      probe.url,
-    ]);
+    const result = probe.execute();
     if (result.ok) {
       return { ok: true, api: probe.api, label: probe.name };
     }
+    // Preserve the raw response body alongside the summarized message so the
+    // NVCF "Function not found for account" detector below can fall back to
+    // the raw body if summarizeProbeError ever stops surfacing the marker
+    // through `message`.
     failures.push({
       name: probe.name,
       httpStatus: result.httpStatus,
       curlStatus: result.curlStatus,
       message: result.message,
+      body: result.body,
     });
+  }
+
+  // Detect the NVCF "Function not found for account" error and reframe it
+  // with an actionable next step instead of dumping the raw NVCF body.
+  // See issue #1601 (Bug 2).
+  const accountFailure = failures.find(
+    (failure) =>
+      isNvcfFunctionNotFoundForAccount(failure.message) ||
+      isNvcfFunctionNotFoundForAccount(failure.body),
+  );
+  if (accountFailure) {
+    return {
+      ok: false,
+      message: nvcfFunctionNotFoundMessage(model),
+      failures,
+    };
   }
 
   return {
@@ -1062,9 +1270,10 @@ async function validateOpenAiLikeSelection(
   credentialEnv = null,
   retryMessage = "Please choose a provider/model again.",
   helpUrl = null,
+  options = {},
 ) {
   const apiKey = credentialEnv ? getCredential(credentialEnv) : "";
-  const probe = probeOpenAiLikeEndpoint(endpointUrl, model, apiKey);
+  const probe = probeOpenAiLikeEndpoint(endpointUrl, model, apiKey, options);
   if (!probe.ok) {
     console.error(`  ${label} endpoint validation failed.`);
     console.error(`  ${probe.message}`);
@@ -1127,7 +1336,9 @@ async function validateCustomOpenAiLikeSelection(
   helpUrl = null,
 ) {
   const apiKey = getCredential(credentialEnv);
-  const probe = probeOpenAiLikeEndpoint(endpointUrl, model, apiKey);
+  const probe = probeOpenAiLikeEndpoint(endpointUrl, model, apiKey, {
+    requireResponsesToolCalling: true,
+  });
   if (probe.ok) {
     console.log(`  ${probe.label} available — OpenClaw will use ${probe.api}.`);
     return { ok: true, api: probe.api };
@@ -1548,7 +1759,9 @@ async function preflight() {
     console.log("  ⓘ Running under WSL");
   }
 
-  // OpenShell CLI
+  // OpenShell CLI — install if missing, upgrade if below minimum version.
+  // MIN_VERSION in install-openshell.sh handles the version gate; calling it
+  // when openshell already exists is safe (it exits early if version is OK).
   let openshellInstall = { localBin: null, futureShellPathHint: null };
   if (!isOpenshellInstalled()) {
     console.log("  openshell CLI not found. Installing...");
@@ -1558,10 +1771,66 @@ async function preflight() {
       console.error("  Install manually: https://github.com/NVIDIA/OpenShell/releases");
       process.exit(1);
     }
+  } else {
+    // Ensure the installed version meets the minimum required by install-openshell.sh.
+    // The script itself is idempotent — it exits early if the version is already sufficient.
+    const currentVersion = getInstalledOpenshellVersion();
+    if (!currentVersion) {
+      console.log("  openshell version could not be determined. Reinstalling...");
+      openshellInstall = installOpenshell();
+      if (!openshellInstall.installed) {
+        console.error("  Failed to reinstall openshell CLI.");
+        console.error("  Install manually: https://github.com/NVIDIA/OpenShell/releases");
+        process.exit(1);
+      }
+    } else {
+      const parts = currentVersion.split(".").map(Number);
+      const minParts = [0, 0, 24]; // must match MIN_VERSION in scripts/install-openshell.sh
+      const needsUpgrade =
+        parts[0] < minParts[0] ||
+        (parts[0] === minParts[0] && parts[1] < minParts[1]) ||
+        (parts[0] === minParts[0] && parts[1] === minParts[1] && parts[2] < minParts[2]);
+      if (needsUpgrade) {
+        console.log(
+          `  openshell ${currentVersion} is below minimum required version. Upgrading...`,
+        );
+        openshellInstall = installOpenshell();
+        if (!openshellInstall.installed) {
+          console.error("  Failed to upgrade openshell CLI.");
+          console.error("  Install manually: https://github.com/NVIDIA/OpenShell/releases");
+          process.exit(1);
+        }
+      }
+    }
   }
-  console.log(
-    `  ✓ openshell CLI: ${runCaptureOpenshell(["--version"], { ignoreError: true }) || "unknown"}`,
-  );
+  const openshellVersionOutput = runCaptureOpenshell(["--version"], { ignoreError: true });
+  console.log(`  ✓ openshell CLI: ${openshellVersionOutput || "unknown"}`);
+  // Enforce nemoclaw-blueprint/blueprint.yaml's min_openshell_version. Without
+  // this check, users can complete a full onboard against an OpenShell that
+  // pre-dates required CLI surface (e.g. `sandbox exec`, `--upload`) and hit
+  // silent failures inside the sandbox at runtime. See #1317.
+  const installedOpenshellVersion = getInstalledOpenshellVersion(openshellVersionOutput);
+  const minOpenshellVersion = getBlueprintMinOpenshellVersion();
+  if (
+    installedOpenshellVersion &&
+    minOpenshellVersion &&
+    !versionGte(installedOpenshellVersion, minOpenshellVersion)
+  ) {
+    console.error("");
+    console.error(
+      `  ✗ openshell ${installedOpenshellVersion} is below the minimum required by this NemoClaw release.`,
+    );
+    console.error(`    blueprint.yaml min_openshell_version: ${minOpenshellVersion}`);
+    console.error("");
+    console.error("    Upgrade openshell and retry:");
+    console.error("      https://github.com/NVIDIA/OpenShell/releases");
+    console.error(
+      "    Or remove the existing binary so the installer can re-fetch a current build:",
+    );
+    console.error('      command -v openshell && rm -f "$(command -v openshell)"');
+    console.error("");
+    process.exit(1);
+  }
   if (openshellInstall.futureShellPathHint) {
     console.log(
       `  Note: openshell was installed to ${openshellInstall.localBin} for this onboarding run.`,
@@ -1594,6 +1863,45 @@ async function preflight() {
       registry.clearAll();
     }
     console.log("  ✓ Previous session cleaned up");
+  }
+
+  // Clean up orphaned Docker containers from interrupted onboard (e.g. Ctrl+C
+  // during gateway start). The container may still be running even though
+  // OpenShell has no metadata for it (gatewayReuseState === "missing").
+  if (gatewayReuseState === "missing") {
+    const containerName = `openshell-cluster-${GATEWAY_NAME}`;
+    const inspectResult = run(
+      `docker inspect --type container --format '{{.State.Status}}' ${containerName} 2>/dev/null`,
+      { ignoreError: true, suppressOutput: true },
+    );
+    if (inspectResult.status === 0) {
+      console.log("  Cleaning up orphaned gateway container...");
+      run(`docker stop ${containerName} >/dev/null 2>&1`, {
+        ignoreError: true,
+        suppressOutput: true,
+      });
+      run(`docker rm ${containerName} >/dev/null 2>&1`, {
+        ignoreError: true,
+        suppressOutput: true,
+      });
+      const postInspectResult = run(
+        `docker inspect --type container ${containerName} 2>/dev/null`,
+        {
+          ignoreError: true,
+          suppressOutput: true,
+        },
+      );
+      if (postInspectResult.status !== 0) {
+        run(
+          `docker volume ls -q --filter "name=openshell-cluster-${GATEWAY_NAME}" | grep . && docker volume ls -q --filter "name=openshell-cluster-${GATEWAY_NAME}" | xargs docker volume rm 2>/dev/null || true`,
+          { ignoreError: true, suppressOutput: true },
+        );
+        registry.clearAll();
+        console.log("  ✓ Orphaned gateway container removed");
+      } else {
+        console.warn("  ! Found an orphaned gateway container, but automatic cleanup failed.");
+      }
+    }
   }
 
   // Required ports — gateway (8080) and dashboard (18789)
@@ -2203,15 +2511,27 @@ async function createSandbox(
   run(`rm -rf "${buildCtx}"`, { ignoreError: true });
 
   if (createResult.status !== 0) {
-    console.error("");
-    console.error(`  Sandbox creation failed (exit ${createResult.status}).`);
-    if (createResult.output) {
+    const failure = classifySandboxCreateFailure(createResult.output);
+    if (failure.kind === "sandbox_create_incomplete") {
+      // The sandbox was created in the gateway but the create stream exited
+      // with a non-zero code (e.g. SSH 255).  Fall through to the ready-wait
+      // loop — the sandbox may still reach Ready on its own.
+      console.warn("");
+      console.warn(
+        `  Create stream exited with code ${createResult.status} after sandbox was created.`,
+      );
+      console.warn("  Checking whether the sandbox reaches Ready state...");
+    } else {
       console.error("");
-      console.error(createResult.output);
+      console.error(`  Sandbox creation failed (exit ${createResult.status}).`);
+      if (createResult.output) {
+        console.error("");
+        console.error(createResult.output);
+      }
+      console.error("  Try:  openshell sandbox list        # check gateway state");
+      printSandboxCreateRecoveryHints(createResult.output);
+      process.exit(createResult.status || 1);
     }
-    console.error("  Try:  openshell sandbox list        # check gateway state");
-    printSandboxCreateRecoveryHints(createResult.output);
-    process.exit(createResult.status || 1);
   }
 
   // Wait for sandbox to reach Ready state in k3s before registering.
@@ -2402,7 +2722,7 @@ async function setupNim(gpu) {
         if (selected.key === "custom") {
           const endpointInput = isNonInteractive()
             ? (process.env.NEMOCLAW_ENDPOINT_URL || "").trim()
-            : await prompt("  OpenAI-compatible base URL (e.g., https://openrouter.ai/api/v1): ");
+            : await prompt("  OpenAI-compatible base URL (e.g., https://openrouter.ai): ");
           const navigation = getNavigationChoice(endpointInput);
           if (navigation === "back") {
             console.log("  Returning to provider selection.");
@@ -2597,6 +2917,10 @@ async function setupNim(gpu) {
                   credentialEnv,
                   retryMessage,
                   remoteConfig.helpUrl,
+                  {
+                    requireResponsesToolCalling: shouldRequireResponsesToolCalling(provider),
+                    skipResponsesProbe: shouldSkipResponsesProbe(provider),
+                  },
                 );
                 if (validation.ok) {
                   preferredInferenceApi = validation.api;
@@ -2624,6 +2948,10 @@ async function setupNim(gpu) {
               credentialEnv,
               "Please choose a provider/model again.",
               remoteConfig.helpUrl,
+              {
+                requireResponsesToolCalling: shouldRequireResponsesToolCalling(provider),
+                skipResponsesProbe: shouldSkipResponsesProbe(provider),
+              },
             );
             if (validation.ok) {
               preferredInferenceApi = validation.api;
@@ -2996,7 +3324,17 @@ async function setupInference(
       console.error(`  ${providerResult.message}`);
       process.exit(providerResult.status || 1);
     }
-    runOpenshell(["inference", "set", "--no-verify", "--provider", "vllm-local", "--model", model]);
+    runOpenshell([
+      "inference",
+      "set",
+      "--no-verify",
+      "--provider",
+      "vllm-local",
+      "--model",
+      model,
+      "--timeout",
+      String(LOCAL_INFERENCE_TIMEOUT_SECS),
+    ]);
   } else if (provider === "ollama-local") {
     const validation = validateLocalProvider(provider, runCapture);
     if (!validation.ok) {
@@ -3020,6 +3358,8 @@ async function setupInference(
       "ollama-local",
       "--model",
       model,
+      "--timeout",
+      String(LOCAL_INFERENCE_TIMEOUT_SECS),
     ]);
     console.log(`  Priming Ollama model: ${model}`);
     run(getOllamaWarmupCommand(model), { ignoreError: true });
@@ -4191,6 +4531,8 @@ module.exports = {
   getNavigationChoice,
   getSandboxInferenceConfig,
   getInstalledOpenshellVersion,
+  getBlueprintMinOpenshellVersion,
+  versionGte,
   getRequestedModelHint,
   getRequestedProviderHint,
   getStableGatewayImageRef,
@@ -4227,6 +4569,7 @@ module.exports = {
   setupPoliciesWithSelection,
   summarizeCurlFailure,
   summarizeProbeFailure,
+  hasResponsesToolCall,
   upsertProvider,
   hydrateCredentialEnv,
   pruneKnownHostsEntries,

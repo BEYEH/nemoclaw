@@ -1,204 +1,247 @@
-# 🦞 NVIDIA NemoClaw: Reference Stack for Running OpenClaw in OpenShell
+<!-- omit in toc -->
+# Nemoclaw
 
-<!-- start-badges -->
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue)](https://github.com/NVIDIA/NemoClaw/blob/main/LICENSE)
-[![Security Policy](https://img.shields.io/badge/Security-Report%20a%20Vulnerability-red)](https://github.com/NVIDIA/NemoClaw/blob/main/SECURITY.md)
-[![Project Status](https://img.shields.io/badge/status-alpha-orange)](https://github.com/NVIDIA/NemoClaw/blob/main/docs/about/release-notes.md)
-[![Discord](https://img.shields.io/badge/Discord-Join-7289da)](https://discord.gg/XFpfPv9Uvx)
-<!-- end-badges -->
+<!-- omit in toc -->
+## Table of contents
 
-<!-- start-intro -->
-NVIDIA NemoClaw is an open source reference stack that simplifies running [OpenClaw](https://openclaw.ai) always-on assistants more safely.
-It installs the [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) runtime, part of NVIDIA Agent Toolkit, which provides additional security for running autonomous agents.
-<!-- end-intro -->
+- [Document](#document)
+- [Prerequisite](#prerequisite)
+- [General Setup](#general-setup)
+- [Developer Setup](#developer-setup)
+  - [Contribute](#contribute)
+  - [Install](#install)
+- [Uninstall](#uninstall)
+- [Observe](#observe)
+  - [GPU 使用率](#gpu-使用率)
+- [Reference](#reference)
+- [Appendix](#appendix)
+  - [Issue](#issue)
 
-> **Alpha software**
->
-> NemoClaw is available in early preview starting March 16, 2026.
-> This software is not production-ready.
-> Interfaces, APIs, and behavior may change without notice as we iterate on the design.
-> The project is shared to gather feedback and enable early experimentation.
-> We welcome issues and discussion from the community while the project evolves.
+## Document
 
-NemoClaw adds guided onboarding, a hardened blueprint, state management, OpenShell-managed channel messaging, routed inference, and layered protection on top of the [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) runtime. For the full feature list, refer to [Overview](https://docs.nvidia.com/nemoclaw/latest/about/overview.html). For the system diagram, component model, and blueprint lifecycle, refer to [How It Works](https://docs.nvidia.com/nemoclaw/latest/about/how-it-works.html) and [Architecture](https://docs.nvidia.com/nemoclaw/latest/reference/architecture.html).
+- [NVIDIA / NemoClaw - README.md](./nvidia-nemoclaw.md)
 
-## Getting Started
+## Prerequisite
 
-Follow these steps to install NemoClaw and run your first sandboxed OpenClaw agent.
+| 項目 | 最低需求 | 建議 |
+|------|----------|------|
+| CPU | 4 vCPU | 4+ vCPU |
+| RAM | 8 GB | 16 GB |
+| Disk | 20 GB | 40 GB |
+| OS | Ubuntu 22.04 LTS+ | — |
+| Container runtime | Docker 或 Podman（Linux）| — |
+| OpenShell | 透過安裝腳本取得 | — |
+| Node.js | 22.16+ | — |
+| npm | 10+ | — |
+| uv | 任意版本（Python 依賴管理） | — |
+| Python | 3.11+（blueprint 與文件建置用） | — |
 
-<!-- start-quickstart-guide -->
+## General Setup
 
-### Prerequisites
-
-Before getting started, check the prerequisites to ensure you have the necessary software and hardware to run NemoClaw.
-
-#### Hardware
-
-| Resource | Minimum        | Recommended      |
-|----------|----------------|------------------|
-| CPU      | 4 vCPU         | 4+ vCPU          |
-| RAM      | 8 GB           | 16 GB            |
-| Disk     | 20 GB free     | 40 GB free       |
-
-The sandbox image is approximately 2.4 GB compressed. During image push, the Docker daemon, k3s, and the OpenShell gateway run alongside the export pipeline, which buffers decompressed layers in memory. On machines with less than 8 GB of RAM, this combined usage can trigger the OOM killer. If you cannot add memory, configuring at least 8 GB of swap can work around the issue at the cost of slower performance.
-
-#### Software
-
-| Dependency | Version                          |
-|------------|----------------------------------|
-| Linux      | Ubuntu 22.04 LTS or later |
-| Node.js    | 22.16 or later |
-| npm        | 10 or later |
-| Container runtime | Supported runtime installed and running |
-| [OpenShell](https://github.com/NVIDIA/OpenShell) | Installed |
-
-#### OpenShell Lifecycle
-
-For NemoClaw-managed environments, use `nemoclaw onboard` when you need to create or recreate the OpenShell gateway or sandbox.
-Avoid `openshell self-update`, `npm update -g openshell`, `openshell gateway start --recreate`, or `openshell sandbox create` directly unless you intend to manage OpenShell separately and then rerun `nemoclaw onboard`.
-
-#### Container Runtimes
-
-| Platform | Supported runtimes | Notes |
-|----------|--------------------|-------|
-| Linux | Docker, Podman | Primary supported path. |
-| macOS (Apple Silicon) | Colima, Docker Desktop, Podman | Install Xcode Command Line Tools (`xcode-select --install`) and start the runtime before running the installer. |
-| macOS (Intel) | Colima, Docker Desktop | Podman on Intel macOS is not yet supported. |
-| Windows WSL | Docker Desktop (WSL backend) | Supported target path. |
-| DGX Spark | Docker | Use the standard installer and `nemoclaw onboard`. |
-
-### Install NemoClaw and Onboard OpenClaw Agent
-
-Download and run the installer script.
-The script installs Node.js if it is not already present, then runs the guided onboard wizard to create a sandbox, configure inference, and apply security policies.
-
-> **ℹ️ Note**
->
-> NemoClaw creates a fresh OpenClaw instance inside the sandbox during the onboarding process.
+執行官方安裝腳本，完成安裝與 onboard：
 
 ```bash
 curl -fsSL https://www.nvidia.com/nemoclaw.sh | bash
 ```
 
-If you use nvm or fnm to manage Node.js, the installer may not update your current shell's PATH.
-If `nemoclaw` is not found after install, run `source ~/.bashrc` (or `source ~/.zshrc` for zsh) or open a new terminal.
+- **注意**：若安裝後找不到 `nemoclaw` 指令，執行 `source ~/.bashrc`（zsh 用 `source ~/.zshrc`）或重開終端。
 
-When the install completes, a summary confirms the running environment:
-
-```text
-──────────────────────────────────────────────────
-Sandbox      my-assistant (Landlock + seccomp + netns)
-Model        nvidia/nemotron-3-super-120b-a12b (NVIDIA Endpoints)
-──────────────────────────────────────────────────
-Run:         nemoclaw my-assistant connect
-Status:      nemoclaw my-assistant status
-Logs:        nemoclaw my-assistant logs --follow
-──────────────────────────────────────────────────
-
-[INFO]  === Installation complete ===
-```
-
-### Chat with the Agent
-
-Connect to the sandbox, then chat with the agent through the TUI or the CLI.
+連線到 sandbox：
 
 ```bash
 nemoclaw my-assistant connect
 ```
 
-In the sandbox shell, open the OpenClaw terminal UI and start a chat:
+進入 sandbox shell 後，開啟 TUI 與 agent 對話：
 
 ```bash
 openclaw tui
 ```
 
-Alternatively, send a single message and print the response:
+傳送單一訊息並印出回應：
 
 ```bash
 openclaw agent --agent main --local -m "hello" --session-id test
 ```
 
-### Uninstall
+## Developer Setup
 
-To remove NemoClaw and all resources created during setup, run the uninstall script:
+### Contribute
+
+本專案 fork 自 `NVIDIA/NemoClaw`，`origin/main` 作為上游鏡像，會不定期透過 GitHub Sync fork 更新。開發完成後經 `release-NAME` 測試驗收，再合併至 `main-NAME`。
+
+```mermaid
+flowchart TD
+    U["NVIDIA/NemoClaw (main)"]
+    OM["origin/main (上游鏡像)"]
+    D["dev-NAME"]
+    R["release-NAME (穩定測試區)"]
+    M["main-NAME (正式發佈區)"]
+    A["編輯檔案"] --> B["/commit"] --> D
+    U -->|"GitHub Sync fork"| OM
+    OM -->|"git merge origin/main"| D
+    D -->|"PR 1：push & Pull Request"| R
+    R -->|"PR 2：驗收通過後 Pull Request"| M
+```
+
+- 定期同步上游
+
+  ```bash
+  # 1. 至 GitHub 點 Sync fork，更新 origin/main
+  # 2. 在 dev-NAME 執行
+  git fetch origin
+  git merge origin/main
+  ```
+
+- 日常開發流程
+
+  ```bash
+  # 1. 編輯檔案後 commit
+  /commit
+
+  # 2. push 至個人 fork
+  git push origin dev-NAME
+
+  # 3. 至 GitHub 建立 PR 1，將 dev-NAME 合併至 release-NAME（測試驗收）
+
+  # 4. 驗收通過後，建立 PR 2，將 release-NAME 合併至 main-NAME
+  ```
+
+### Install
+
+- Step 1：安裝 Ollama 與拉取模型
+
+  ```bash
+  # 安裝 Ollama
+  curl -fsSL https://ollama.com/install.sh | sh
+
+  # 啟動服務（若未自動啟動）
+  ollama serve &
+
+  # 拉取 gpt-oss:20b 模型（約 14 GB）
+  ollama pull gpt-oss:20b
+  ```
+
+  - **記憶體提示**：`gpt-oss:20b` 需要約 16 GB RAM。
+
+  - **GPU Persistence Mode**：啟用後 GPU driver 保持常駐，可減少 inference 冷啟動延遲。若機器專用於跑模型，建議啟用；若需節省閒置資源則停用。
+
+    ```bash
+    sudo nvidia-smi -pm 1   # 啟用（推薦用於專用 GPU 機器）
+    sudo nvidia-smi -pm 0   # 停用
+    ```
+
+- Step 2：安裝 OpenShell
+
+  ```bash
+  bash scripts/install-openshell.sh
+  ```
+
+  確認安裝成功：
+
+  ```bash
+  openshell --version
+  ```
+
+  - **OpenShell Lifecycle**：NemoClaw 管理的環境應透過 `nemoclaw onboard` 操作，避免直接呼叫以下指令繞過管理層：
+
+    | 指令 | 用途 | 建議 |
+    |------|------|------|
+    | `openshell self-update` | 升級 OpenShell 但不更新 nemoclaw 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+    | `npm update -g openshell` | 更新 OpenShell npm 套件但不更新 nemoclaw 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+    | `openshell gateway start --recreate` | 重建 gateway 但不重建 sandbox 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+    | `openshell sandbox create` | 直接建立 sandbox 會與 nemoclaw 狀態不同步 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+
+- Step 3：安裝依賴並讓 CLI 可用
+
+  ```bash
+  # 1. 根目錄 npm 依賴（跳過 prepare 腳本避免移除 devDependencies）
+  npm install --ignore-scripts
+
+  # 2. 手動 build CLI TypeScript
+  npx tsc -p tsconfig.src.json
+
+  # 3. build plugin 子專案
+  cd nemoclaw && npm install && npm run build && cd ..
+
+  # 4. blueprint Python 依賴
+  cd nemoclaw-blueprint && uv sync && cd ..
+
+  # 5. 讓 nemoclaw 指令全域可用
+  npm link
+  ```
+
+  確認：
+
+  ```bash
+  nemoclaw --version
+  ```
+
+- Step 4：執行 onboard
+
+  ```bash
+  nemoclaw onboard
+  ```
+
+  引導過程中選擇 inference provider 時：
+
+  | 項目 | 填入值 |
+  |------|--------|
+  | Provider | Ollama (local) |
+  | URL | `http://localhost:11434` |
+  | Model | `gpt-oss:20b` |
+
+- Step 5：連線到 sandbox
+
+  安裝完成後，連線與使用方式同 [General Setup](#general-setup)。
+
+## Uninstall
+
+執行專案內建的 uninstall 腳本，移除 NemoClaw 建立的所有 host 端資源：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NVIDIA/NemoClaw/refs/heads/main/uninstall.sh | bash
+nemoclaw uninstall
 ```
 
-| Flag               | Effect                                              |
-|--------------------|-----------------------------------------------------|
-| `--yes`            | Skip the confirmation prompt.                       |
-| `--keep-openshell` | Leave the `openshell` binary installed.              |
-| `--delete-models`  | Also remove NemoClaw-pulled Ollama models.           |
+腳本預設會保留 Docker、Node.js、npm 與 Ollama，僅清除以下項目：
 
-For troubleshooting installation or onboarding issues, see the [Troubleshooting guide](https://docs.nvidia.com/nemoclaw/latest/reference/troubleshooting.html).
+- 所有 OpenShell sandboxes、gateway 與 NemoClaw providers
+- 相關 Docker containers、images 與 volumes
+- `~/.nemoclaw`、`~/.config/openshell`、`~/.config/nemoclaw` 狀態目錄
+- 全域 `nemoclaw` npm 套件
+- OpenShell binary（預設移除；若要保留請加 `--keep-openshell`）
 
-<!-- end-quickstart-guide -->
+可用選項：
 
-## Documentation
+| 選項 | 說明 |
+|------|------|
+| `--yes` | 略過確認提示，直接執行 |
+| `--keep-openshell` | 保留 `openshell` binary，不移除 |
+| `--delete-models` | 一併刪除 NemoClaw 拉取的 Ollama 模型 |
 
-Refer to the following pages on the official documentation website for more information on NemoClaw.
+## Observe
 
-| Page | Description |
-|------|-------------|
-| [Overview](https://docs.nvidia.com/nemoclaw/latest/about/overview.html) | What NemoClaw does and how it fits together. |
-| [How It Works](https://docs.nvidia.com/nemoclaw/latest/about/how-it-works.html) | Plugin, blueprint, sandbox lifecycle, and protection layers. |
-| [Architecture](https://docs.nvidia.com/nemoclaw/latest/reference/architecture.html) | Plugin structure, blueprint lifecycle, sandbox environment, and host-side state. |
-| [Inference Options](https://docs.nvidia.com/nemoclaw/latest/inference/inference-options.html) | Supported providers, validation, and routed inference configuration. |
-| [Network Policies](https://docs.nvidia.com/nemoclaw/latest/reference/network-policies.html) | Baseline rules, operator approval flow, and egress control. |
-| [Customize Network Policy](https://docs.nvidia.com/nemoclaw/latest/network-policy/customize-network-policy.html) | Static and dynamic policy changes, presets. |
-| [Security Best Practices](https://docs.nvidia.com/nemoclaw/latest/security/best-practices.html) | Controls reference, risk framework, and posture profiles for sandbox security. |
-| [Sandbox Hardening](https://docs.nvidia.com/nemoclaw/latest/deployment/sandbox-hardening.html) | Container security measures, capability drops, process limits. |
-| [CLI Commands](https://docs.nvidia.com/nemoclaw/latest/reference/commands.html) | Full NemoClaw CLI command reference. |
-| [Troubleshooting](https://docs.nvidia.com/nemoclaw/latest/reference/troubleshooting.html) | Common issues and resolution steps. |
+### GPU 使用率
 
-## Project Structure
-
-The following directories make up the NemoClaw repository.
-
-```text
-NemoClaw/
-├── bin/              # CLI entry point and library modules (CJS)
-├── nemoclaw/         # TypeScript plugin (Commander CLI extension)
-│   └── src/
-│       ├── blueprint/    # Runner, snapshot, SSRF validation, state
-│       ├── commands/     # Slash commands, migration state
-│       └── onboard/      # Onboarding config
-├── nemoclaw-blueprint/   # Blueprint YAML and network policies
-├── scripts/          # Install helpers, setup, automation
-├── test/             # Integration and E2E tests
-└── docs/             # User-facing docs (Sphinx/MyST)
+```bash
+watch -n 1 nvidia-smi
 ```
 
-## Community
+## Reference
 
-Join the NemoClaw community to ask questions, share feedback, and report issues.
+- GitHub
+  - [openclaw / openclaw](https://github.com/openclaw/openclaw)
+  - [NVIDIA / NemoClaw](https://github.com/NVIDIA/NemoClaw)
+  - [NVIDIA / OpenShell](https://github.com/NVIDIA/OpenShell)
+- Ollama Models
+  - [gpt-oss](https://ollama.com/library/gpt-oss)
+  - [qwen3.5](https://ollama.com/library/qwen3.5)
 
-- [Discord](https://discord.gg/XFpfPv9Uvx)
-- [GitHub Discussions](https://github.com/NVIDIA/NemoClaw/discussions)
-- [GitHub Issues](https://github.com/NVIDIA/NemoClaw/issues)
+## Appendix
 
-## Contributing
+### Issue
 
-We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, and the PR process.
-
-## Security
-
-NVIDIA takes security seriously.
-If you discover a vulnerability in NemoClaw, **DO NOT open a public issue.**
-Use one of the private reporting channels described in [SECURITY.md](SECURITY.md):
-
-- Submit a report through the [NVIDIA Vulnerability Disclosure Program](https://www.nvidia.com/en-us/security/report-vulnerability/).
-- Send an email to [psirt@nvidia.com](mailto:psirt@nvidia.com) encrypted with the [NVIDIA PGP key](https://www.nvidia.com/en-us/security/pgp-key).
-- Use [GitHub's private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository) to submit a report directly on this repository.
-
-For security bulletins and PSIRT policies, visit the [NVIDIA Product Security](https://www.nvidia.com/en-us/security/) portal.
-
-## Notice and Disclaimer
-
-This software automatically retrieves, accesses or interacts with external materials. Those retrieved materials are not distributed with this software and are governed solely by separate terms, conditions and licenses. You are solely responsible for finding, reviewing and complying with all applicable terms, conditions, and licenses, and for verifying the security, integrity and suitability of any retrieved materials for your specific use case. This software is provided "AS IS", without warranty of any kind. The author makes no representations or warranties regarding any retrieved materials, and assumes no liability for any losses, damages, liabilities or legal consequences from your use or inability to use this software or any retrieved materials. Use this software and the retrieved materials at your own risk.
-
-## License
-
-Apache 2.0. See [LICENSE](LICENSE).
+- `nemoclaw onboard` 因 OpenShell 版本檢查失敗而中止
+  - **上游 Issue**：[#1612](https://github.com/NVIDIA/NemoClaw/issues/1612)（Open，2026-04-09 開出，尚無修復 PR）
+  - **原因**：[PR #1564](https://github.com/NVIDIA/NemoClaw/pull/1564)（commit `0dc3334`，2026-04-08）在 `preflight()` 加入了 `min_openshell_version` enforce，但 `blueprint.yaml` 宣告 `min_openshell_version: "0.1.0"` 而 OpenShell 最新 release 僅 `0.0.25`
+  - **Workaround**：將 `nemoclaw-blueprint/blueprint.yaml` 的 `min_openshell_version` 從 `"0.1.0"` 改為 `"0.0.24"`
