@@ -5,11 +5,12 @@
 ## Table of contents
 
 - [Document](#document)
-- [Contribute](#contribute)
-  - [定期同步上游](#定期同步上游)
-  - [日常開發流程](#日常開發流程)
 - [Prerequisite](#prerequisite)
-- [Setup](#setup)
+- [General Setup](#general-setup)
+- [Developer Setup](#developer-setup)
+  - [Contribute](#contribute)
+    - [定期同步上游](#定期同步上游)
+    - [日常開發流程](#日常開發流程)
   - [Step 1：安裝 Ollama 與拉取模型](#step-1安裝-ollama-與拉取模型)
   - [Step 2：安裝 OpenShell](#step-2安裝-openshell)
   - [Step 3：安裝 npm 依賴並讓 CLI 可用](#step-3安裝-npm-依賴並讓-cli-可用)
@@ -23,7 +24,52 @@
 
 - [NVIDIA / NemoClaw - README.md](./nvidia-nemoclaw.md)
 
-## Contribute
+## Prerequisite
+
+| 項目 | 最低需求 | 建議 |
+|------|----------|------|
+| CPU | 4 vCPU | 4+ vCPU |
+| RAM | 8 GB | 16 GB |
+| Disk | 20 GB | 40 GB |
+| OS | Ubuntu 22.04 LTS+ | — |
+| Container runtime | Docker 或 Podman（Linux）| — |
+| OpenShell | 透過安裝腳本取得 | — |
+| Node.js | 22.16+ | — |
+| npm | 10+ | — |
+| uv | 任意版本（Python 依賴管理） | — |
+| Python | 3.11+（blueprint 與文件建置用） | — |
+
+## General Setup
+
+執行官方安裝腳本，完成安裝與 onboard：
+
+```bash
+curl -fsSL https://www.nvidia.com/nemoclaw.sh | bash
+```
+
+- **注意**：若安裝後找不到 `nemoclaw` 指令，執行 `source ~/.bashrc`（zsh 用 `source ~/.zshrc`）或重開終端。
+
+連線到 sandbox：
+
+```bash
+nemoclaw my-assistant connect
+```
+
+進入 sandbox shell 後，開啟 TUI 與 agent 對話：
+
+```bash
+openclaw tui
+```
+
+傳送單一訊息並印出回應：
+
+```bash
+openclaw agent --agent main --local -m "hello" --session-id test
+```
+
+## Developer Setup
+
+### Contribute
 
 本專案 fork 自 `NVIDIA/NemoClaw`，`origin/main` 作為上游鏡像，會不定期透過 GitHub Sync fork 更新。開發完成後經 `release-NAME` 測試驗收，再合併至 `main-NAME`。
 
@@ -41,7 +87,7 @@ flowchart TD
     R -->|"PR 2：驗收通過後 Pull Request"| M
 ```
 
-### 定期同步上游
+#### 定期同步上游
 
 ```bash
 # 1. 至 GitHub 點 Sync fork，更新 origin/main
@@ -50,7 +96,7 @@ git fetch origin
 git merge origin/main
 ```
 
-### 日常開發流程
+#### 日常開發流程
 
 ```bash
 # 1. 編輯檔案後 commit
@@ -63,23 +109,6 @@ git push origin dev-NAME
 
 # 4. 驗收通過後，建立 PR 2，將 release-NAME 合併至 main-NAME
 ```
-
-## Prerequisite
-
-| 項目 | 最低需求 | 建議 |
-|------|----------|------|
-| CPU | 4 vCPU | 4+ vCPU |
-| RAM | 8 GB | 16 GB |
-| Disk | 20 GB | 40 GB |
-| OS | Ubuntu 22.04 LTS+ | — |
-| Container runtime | Docker 或 Podman（Linux）| — |
-| OpenShell | 透過安裝腳本取得 | — |
-| Node.js | 22.16+ | — |
-| npm | 10+ | — |
-| uv | 任意版本（Python 依賴管理） | — |
-| Python | 3.11+（blueprint 與文件建置用） | — |
-
-## Setup
 
 ### Step 1：安裝 Ollama 與拉取模型
 
