@@ -10,6 +10,7 @@
 - [Developer Setup](#developer-setup)
   - [Contribute](#contribute)
   - [Install](#install)
+- [Uninstall](#uninstall)
 - [Observe](#observe)
   - [GPU 使用率](#gpu-使用率)
 - [Reference](#reference)
@@ -196,6 +197,30 @@ flowchart TD
   openclaw tui
   ```
 
+## Uninstall
+
+執行專案內建的 uninstall 腳本，移除 NemoClaw 建立的所有 host 端資源：
+
+```bash
+nemoclaw uninstall
+```
+
+腳本預設會保留 Docker、Node.js、npm 與 Ollama，僅清除以下項目：
+
+- 所有 OpenShell sandboxes、gateway 與 NemoClaw providers
+- 相關 Docker containers、images 與 volumes
+- `~/.nemoclaw`、`~/.config/openshell`、`~/.config/nemoclaw` 狀態目錄
+- 全域 `nemoclaw` npm 套件
+- OpenShell binary（預設移除；若要保留請加 `--keep-openshell`）
+
+可用選項：
+
+| 選項 | 說明 |
+|------|------|
+| `--yes` | 略過確認提示，直接執行 |
+| `--keep-openshell` | 保留 `openshell` binary，不移除 |
+| `--delete-models` | 一併刪除 NemoClaw 拉取的 Ollama 模型 |
+
 ## Observe
 
 ### GPU 使用率
@@ -207,8 +232,9 @@ watch -n 1 nvidia-smi
 ## Reference
 
 - GitHub
-  - [NVIDIA / NemoClaw](https://github.com/NVIDIA/NemoClaw)
   - [openclaw / openclaw](https://github.com/openclaw/openclaw)
+  - [NVIDIA / NemoClaw](https://github.com/NVIDIA/NemoClaw)
+  - [NVIDIA / OpenShell](https://github.com/NVIDIA/OpenShell)
 - Ollama Models
   - [gpt-oss](https://ollama.com/library/gpt-oss)
   - [qwen3.5](https://ollama.com/library/qwen3.5)
