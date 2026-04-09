@@ -90,11 +90,11 @@ curl -fsSL https://ollama.com/install.sh | sh
 # 啟動服務（若未自動啟動）
 ollama serve &
 
-# 拉取 qwen3.5:27b 模型（約 17 GB）
-ollama pull qwen3.5:27b
+# 拉取 gpt-oss:20b 模型（約 14 GB）
+ollama pull gpt-oss:20b
 ```
 
-- **記憶體提示**：`qwen3.5:27b` 需要約 17 GB RAM。若記憶體不足，可改用 `qwen3.5:9b`（6.6 GB）或 `qwen3.5:4b`（3.4 GB）。
+- **記憶體提示**：`gpt-oss:20b` 需要約 16 GB RAM。
 
 - **GPU Persistence Mode**：啟用後 GPU driver 保持常駐，可減少 inference 冷啟動延遲。若機器專用於跑模型，建議啟用；若需節省閒置資源則停用。
 
@@ -148,7 +148,7 @@ nemoclaw onboard
 |------|--------|
 | Provider | Ollama (local) |
 | URL | `http://localhost:11434` |
-| Model | `qwen3.5:27b` |
+| Model | `gpt-oss:20b` |
 
 ### Step 5：連線到 sandbox
 
