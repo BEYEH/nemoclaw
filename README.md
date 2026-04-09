@@ -193,15 +193,7 @@ flowchart TD
 
 - Step 5：連線到 sandbox
 
-  ```bash
-  nemoclaw my-assistant connect
-  ```
-
-  進入 sandbox shell 後，開啟 TUI 與 agent 對話：
-
-  ```bash
-  openclaw tui
-  ```
+  安裝完成後，連線與使用方式同 [General Setup](#general-setup)。
 
 ## Uninstall
 
