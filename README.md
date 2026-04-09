@@ -11,11 +11,12 @@
   - [Contribute](#contribute)
     - [定期同步上游](#定期同步上游)
     - [日常開發流程](#日常開發流程)
-  - [Step 1：安裝 Ollama 與拉取模型](#step-1安裝-ollama-與拉取模型)
-  - [Step 2：安裝 OpenShell](#step-2安裝-openshell)
-  - [Step 3：安裝 npm 依賴並讓 CLI 可用](#step-3安裝-npm-依賴並讓-cli-可用)
-  - [Step 4：執行 onboard](#step-4執行-onboard)
-  - [Step 5：連線到 sandbox](#step-5連線到-sandbox)
+  - [Install](#install)
+    - [Step 1：安裝 Ollama 與拉取模型](#step-1安裝-ollama-與拉取模型)
+    - [Step 2：安裝 OpenShell](#step-2安裝-openshell)
+    - [Step 3：安裝 npm 依賴並讓 CLI 可用](#step-3安裝-npm-依賴並讓-cli-可用)
+    - [Step 4：執行 onboard](#step-4執行-onboard)
+    - [Step 5：連線到 sandbox](#step-5連線到-sandbox)
 - [Observe](#observe)
   - [GPU 使用率](#gpu-使用率)
 - [Reference](#reference)
@@ -110,7 +111,9 @@ git push origin dev-NAME
 # 4. 驗收通過後，建立 PR 2，將 release-NAME 合併至 main-NAME
 ```
 
-### Step 1：安裝 Ollama 與拉取模型
+### Install
+
+#### Step 1：安裝 Ollama 與拉取模型
 
 ```bash
 # 安裝 Ollama
@@ -132,7 +135,7 @@ ollama pull gpt-oss:20b
   sudo nvidia-smi -pm 0   # 停用
   ```
 
-### Step 2：安裝 OpenShell
+#### Step 2：安裝 OpenShell
 
 ```bash
 bash scripts/install-openshell.sh
@@ -153,7 +156,7 @@ openshell --version
   | `openshell gateway start --recreate` | 重建 gateway 但不重建 sandbox 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
   | `openshell sandbox create` | 直接建立 sandbox 會與 nemoclaw 狀態不同步 | ⚠️ 避免，會繞過 nemoclaw 管理 |
 
-### Step 3：安裝 npm 依賴並讓 CLI 可用
+#### Step 3：安裝 npm 依賴並讓 CLI 可用
 
 ```bash
 # 安裝全部依賴（跳過 prepare 腳本）
@@ -174,7 +177,7 @@ npm link
 nemoclaw --version
 ```
 
-### Step 4：執行 onboard
+#### Step 4：執行 onboard
 
 ```bash
 nemoclaw onboard
@@ -188,7 +191,7 @@ nemoclaw onboard
 | URL | `http://localhost:11434` |
 | Model | `gpt-oss:20b` |
 
-### Step 5：連線到 sandbox
+#### Step 5：連線到 sandbox
 
 ```bash
 nemoclaw my-assistant connect
