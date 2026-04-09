@@ -27,7 +27,7 @@ Every README must follow this header order:
 
 - Place `<!-- omit in toc -->` before H1 and `## Table of contents`
 - Use relative links (e.g., `./subfolder/README.md`), avoid absolute paths
-- Bullet lists use `- ` (not `*`)
+- Bullet lists use `-` (not `*`)
 - H2 for major sections, H3 for subsections
 - TOC 只列出 `##` 和 `###` 層 heading；`####` 及以下不在 TOC 中出現
 - `####` 以下的 heading 應考慮改以 list item 表示，避免 TOC 過長

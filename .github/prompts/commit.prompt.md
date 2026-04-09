@@ -4,7 +4,7 @@ agent: "agent"
 argument-hint: "File paths to commit (leave empty for all changes)"
 ---
 
-Commit workflow:
+# Commit workflow
 
 **If `{argument}` is provided** (specific files):
 
