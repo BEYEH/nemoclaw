@@ -152,20 +152,24 @@ flowchart TD
     | `openshell gateway start --recreate` | 重建 gateway 但不重建 sandbox 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
     | `openshell sandbox create` | 直接建立 sandbox 會與 nemoclaw 狀態不同步 | ⚠️ 避免，會繞過 nemoclaw 管理 |
 
-- Step 3：安裝 npm 依賴並讓 CLI 可用
+- Step 3：安裝依賴並讓 CLI 可用
 
   ```bash
-  # 安裝全部依賴（跳過 prepare 腳本）
+  # 1. 根目錄 npm 依賴（跳過 prepare 腳本避免移除 devDependencies）
   npm install --ignore-scripts
 
-  # 手動補做 CLI build
+  # 2. 手動 build CLI TypeScript
   npx tsc -p tsconfig.src.json
 
-  # 讓 nemoclaw 指令全域可用
+  # 3. build plugin 子專案
+  cd nemoclaw && npm install && npm run build && cd ..
+
+  # 4. blueprint Python 依賴
+  cd nemoclaw-blueprint && uv sync && cd ..
+
+  # 5. 讓 nemoclaw 指令全域可用
   npm link
   ```
-
-  - **注意**：`npm install` 的 `prepare` 腳本會移除 devDependency，需加 `--ignore-scripts`。
 
   確認：
 
