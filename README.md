@@ -115,6 +115,15 @@ bash scripts/install-openshell.sh
 openshell --version
 ```
 
+- **OpenShell Lifecycle**：NemoClaw 管理的環境應透過 `nemoclaw onboard` 操作，避免直接呼叫以下指令繞過管理層：
+
+  | 指令 | 用途 | 建議 |
+  |------|------|------|
+  | `openshell self-update` | 升級 OpenShell 但不更新 nemoclaw 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+  | `npm update -g openshell` | 更新 OpenShell npm 套件但不更新 nemoclaw 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+  | `openshell gateway start --recreate` | 重建 gateway 但不重建 sandbox 狀態 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+  | `openshell sandbox create` | 直接建立 sandbox 會與 nemoclaw 狀態不同步 | ⚠️ 避免，會繞過 nemoclaw 管理 |
+
 ### Step 3：安裝 npm 依賴並讓 CLI 可用
 
 ```bash
