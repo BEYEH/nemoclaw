@@ -14,6 +14,8 @@
 - [Observe](#observe)
   - [GPU 使用率](#gpu-使用率)
 - [Reference](#reference)
+- [Appendix](#appendix)
+  - [Issue](#issue)
 
 ## Document
 
@@ -238,3 +240,12 @@ watch -n 1 nvidia-smi
 - Ollama Models
   - [gpt-oss](https://ollama.com/library/gpt-oss)
   - [qwen3.5](https://ollama.com/library/qwen3.5)
+
+## Appendix
+
+### Issue
+
+- `nemoclaw onboard` 因 OpenShell 版本檢查失敗而中止
+  - **上游 Issue**：[#1612](https://github.com/NVIDIA/NemoClaw/issues/1612)（Open，2026-04-09 開出，尚無修復 PR）
+  - **原因**：[PR #1564](https://github.com/NVIDIA/NemoClaw/pull/1564)（commit `0dc3334`，2026-04-08）在 `preflight()` 加入了 `min_openshell_version` enforce，但 `blueprint.yaml` 宣告 `min_openshell_version: "0.1.0"` 而 OpenShell 最新 release 僅 `0.0.25`
+  - **Workaround**：將 `nemoclaw-blueprint/blueprint.yaml` 的 `min_openshell_version` 從 `"0.1.0"` 改為 `"0.0.24"`
